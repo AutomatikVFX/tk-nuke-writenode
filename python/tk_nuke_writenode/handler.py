@@ -1833,6 +1833,17 @@ class TankWriteNodeHandler(object):
             node, render_template, width, height, output_name
         )
 
+    def __get_file_extension_from_node(self, node):
+        """
+        :returns: The file extension that the current node uses.
+        :rtype: str
+        """
+        settings = self.__get_node_profile_settings(node)
+        raw_file_ext = settings['file_type'].lower()
+        # Return the short forms of file extensions where possible.
+        return {'jpeg': 'jpg',
+                'tiff': 'tif'}.get(raw_file_ext, raw_file_ext)
+
     def __compute_render_path_from(
         self, node, render_template, width, height, output_name
     ):
@@ -1870,6 +1881,9 @@ class TankWriteNodeHandler(object):
 
         # Force use of %d format for nuke renders:
         fields["SEQ"] = "FORMAT: %d"
+
+        # Get the file extension from the node:
+        fields["extension"] = self.__get_file_extension_from_node(node)
 
         # use %V - full view printout as default for the eye field
         fields["eye"] = "%V"
