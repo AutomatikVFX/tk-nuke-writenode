@@ -1735,8 +1735,17 @@ class TankWriteNodeHandler(object):
         anything other than a format (e.g. scale, box)!
         """
         if not nuke.exists("root"):
-            return
+            return 0, 0
         root = nuke.root()
+        # Sometimes on scene setup the root node is existed but not accessible yet.
+        # So we try to find a knob on it and if that throws an error we return (0,0)
+        # This is ok since width and height get correctly calculated later.
+        try:
+            "proxy_type" not in root.knobs()
+        except ValueError as err:
+            if str(err) == 'A PythonObject is not attached to a node':
+                return 0, 0
+            raise
 
         # calculate scale and offset to apply for proxy
         scale_x = scale_y = 1.0
