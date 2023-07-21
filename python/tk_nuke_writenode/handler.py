@@ -263,7 +263,6 @@ class TankWriteNodeHandler(object):
         """
         self._app.log_debug("Looking for placeholder nodes to process...")
 
-        node_found = False
         for n in nuke.allNodes("ModifyMetaData"):
             if not n.name().startswith("ShotgunWriteNodePlaceholder"):
                 continue
@@ -283,12 +282,10 @@ class TankWriteNodeHandler(object):
                 continue
 
             # try and ensure we're connected to the tree after we delete the nodes
-            if not node_found:
-                node_found = True
-                try:
-                    n.dependencies()[0].setSelected(True)
-                except:
-                    pass
+            try:
+                n.dependencies()[0].setSelected(True)
+            except:
+                pass
 
             # create the node:
             new_node = self.create_new_node(profile_name)
