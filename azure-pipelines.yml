@@ -40,4 +40,4 @@ variables:
 jobs:
 - template: build-pipeline.yml@templates
   parameters:
-    has_unit_tests: false
+    skip_tests: true

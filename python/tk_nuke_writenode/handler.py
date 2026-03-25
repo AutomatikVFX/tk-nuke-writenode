@@ -21,6 +21,7 @@ import nukescripts
 
 import sgtk
 from sgtk import TankError
+from tank_vendor import six
 
 
 # Special exception raised when the work file cannot be resolved.
@@ -34,7 +35,7 @@ class TankWriteNodeHandler(object):
     """
 
     SG_WRITE_NODE_CLASS = "WriteTank"
-    SG_WRITE_DEFAULT_NAME = "FlowProductionTrackingWrite"
+    SG_WRITE_DEFAULT_NAME = "ShotGridWrite"
     WRITE_NODE_NAME = "Write1"
 
     OUTPUT_KNOB_NAME = "tank_channel"
@@ -230,7 +231,7 @@ class TankWriteNodeHandler(object):
         # make sure that the file is a proper tank work path
         if not self._script_template.validate(curr_filename):
             nuke.message(
-                "This file is not a PTR work file. Please use PTR Save-As in order "
+                "This file is not a SG work file. Please use SG Save-As in order "
                 "to save the file as a valid work file."
             )
             return
@@ -249,7 +250,7 @@ class TankWriteNodeHandler(object):
             else:
                 postfix += 1
 
-        self._app.log_debug("Created PTR Write Node %s" % node.name())
+        self._app.log_debug("Created SG Write Node %s" % node.name())
 
         # set the profile:
         self.__set_profile(node, profile_name, reset_all_settings=True)
@@ -388,8 +389,8 @@ class TankWriteNodeHandler(object):
 
     def convert_sg_to_nuke_write_nodes(self):
         """
-        Utility function to convert all Flow Production Tracking Write
-        nodes to regular Nuke Write nodes.
+        Utility function to convert all Shotgun Write nodes to regular
+        Nuke Write nodes.
 
         # Example use:
         import sgtk
@@ -407,6 +408,7 @@ class TankWriteNodeHandler(object):
         # get write nodes:
         sg_write_nodes = self.get_nodes()
         for sg_wn in sg_write_nodes:
+
             # set as selected:
             sg_wn.setSelected(True)
             node_name = sg_wn.name()
@@ -453,7 +455,7 @@ class TankWriteNodeHandler(object):
             # As toolkit hasn't created the output folder at this point.
             new_wn["create_directories"].setValue(True)
 
-            # copy across select knob values from the Flow Production Tracking Write node:
+            # copy across select knob values from the Shotgun Write node:
             for knob_name in ["tile_color", "postage_stamp", "label"]:
                 new_wn[knob_name].setValue(sg_wn[knob_name].value())
 
@@ -506,7 +508,7 @@ class TankWriteNodeHandler(object):
         """
         Utility function to convert all Nuke Write nodes to Shotgun
         Write nodes (only converts Write nodes that were previously
-        Flow Production Tracking Write nodes)
+        Shotgun Write nodes)
 
         # Example use:
         import sgtk
@@ -524,6 +526,7 @@ class TankWriteNodeHandler(object):
             group=nuke.root(), filter="Write", recurseGroups=True
         )
         for wn in write_nodes:
+
             # look for additional toolkit knobs:
             profile_knob = wn.knob("tk_profile_name")
             output_knob = wn.knob("tk_output")
@@ -552,7 +555,7 @@ class TankWriteNodeHandler(object):
             node_name = wn.name()
             node_pos = (wn.xpos(), wn.ypos())
 
-            # create new Flow Production Tracking Write node:
+            # create new Shotgun Write node:
             new_sg_wn = nuke.createNode(TankWriteNodeHandler.SG_WRITE_NODE_CLASS)
             new_sg_wn.setSelected(False)
 
@@ -657,7 +660,7 @@ class TankWriteNodeHandler(object):
 
         It also updates the preview fields on the node. and the UI
         """
-        # the Flow Production Tracking Write node is the current node's parent:
+        # the ShotgunWrite node is the current node's parent:
         node = nuke.thisParent()
         if not node:
             return
@@ -675,7 +678,7 @@ class TankWriteNodeHandler(object):
         Callback executed when nuke requests the location of the std output to be computed on the internal Write
         node.  Returns a path on disk. This will return the path in a form that Nuke likes (eg. with slashes).
         """
-        # the Flow Production Tracking Write node is the current node's parent:
+        # the ShotgunWrite node is the current node's parent:
         node = nuke.thisParent()
         if not node:
             return
@@ -731,6 +734,7 @@ class TankWriteNodeHandler(object):
 
         # if we have a valid render path then show it:
         if render_dir:
+
             # run the app
             if sgtk.util.is_linux():
                 cmd = 'xdg-open "%s"' % render_dir
@@ -927,7 +931,7 @@ class TankWriteNodeHandler(object):
         """
         Update the value for the specified knob on the specified node
         but only if it is different to the current value to avoid
-        unnecessarily invalidating the cache
+        unneccesarily invalidating the cache
         """
         current_value = node.knob(name).value()
         if new_value != current_value:
@@ -958,7 +962,7 @@ class TankWriteNodeHandler(object):
         # this will be displayed on the node in the graph
         # useful to tell what type of node it is
         pn = node.knob("profile_name").value()
-        label = "PTR Write %s" % pn
+        label = "SG Write %s" % pn
         self.__update_knob_value(node, "label", label)
 
         # get the render path:
@@ -1058,13 +1062,12 @@ class TankWriteNodeHandler(object):
         """
         Set the current profile for the specified node.
 
-        :param node:                The Flow Production Tracking Write node to set the profile on
+        :param node:                The Shotgun Write node to set the profile on
         :param profile_name:        The name of the profile to set on the node
         :param reset_all_settings:  If true then all settings from the profile will be reset on the node.  If
-                                    false, only those that _aren't_ propagated up to the Flow Production Tracking
-                                    Write node will be reset.  For example, if colorspace has been set in the
-                                    profile and force is False then the knob won't get reset to the value from the
-                                    profile.
+                                    false, only those that _aren't_ propagated up to the Shotgun Write node will
+                                    be reset.  For example, if colorspace has been set in the profile and force
+                                    is False then the knob won't get reset to the value from the profile.
         """
         # can't change the profile if this isn't a valid profile:
         if profile_name not in self._profiles:
@@ -1287,7 +1290,7 @@ class TankWriteNodeHandler(object):
         """
         Controls the file format of the write node
 
-        :param node:                    The Flow Production Tracking Write node to set the profile on
+        :param node:                    The Shotgun Write node to set the profile on
         :param file_type:               The file type to set on the internal Write node
         :param file_settings:           A dictionary of settings to set on the internal Write node
         :param reset_all_settings:      Determines if all settings should be set on the internal Write
@@ -1308,7 +1311,7 @@ class TankWriteNodeHandler(object):
         # and read it back to check that the value is what we expect
         if write_node.knob("file_type").value() != file_type:
             self._app.log_error(
-                "PTR write node configuration refers to an invalid file "
+                "SG write node configuration refers to an invalid file "
                 "format '%s'! Reverting to auto-detect mode instead." % file_type
             )
             write_node.knob("file_type").setValue("  ")
@@ -1318,9 +1321,8 @@ class TankWriteNodeHandler(object):
         knobs_to_skip = []
         if not reset_all_settings:
             # Skip setting any knobs on the internal Write node that are represented by knobs on the
-            # containing Flow Production Tracking Write node.  These knobs are typically only set at
-            # first creation time or when the profile is changed as the artist is then free to change
-            # them.
+            # containing Shotgun Write node.  These knobs are typically only set at first creation
+            # time or when the profile is changed as the artist is then free to change them.
             for knob_name in node.knobs():
                 knob = node.knob(knob_name)
 
@@ -1366,7 +1368,7 @@ class TankWriteNodeHandler(object):
 
             if tcl_settings:
                 decoded_settings = base64.b64decode(tcl_settings)
-                knob_settings = pickle.loads(decoded_settings)
+                knob_settings = pickle.loads(six.ensure_binary(decoded_settings))
                 # We're going to filter out everything that isn't one of our
                 # promoted write node knobs. This will allow us to make sure
                 # that those knobs are set to the correct value, regardless
@@ -1445,7 +1447,7 @@ class TankWriteNodeHandler(object):
         Update the render path and the various feedback knobs based on the current
         context and other node settings.
 
-        :param node:        The Flow Production Tracking Write node to update the path for
+        :param node:        The Shotgun Write node to update the path for
         :param force_reset: Force the path to be reset regardless of any cached
                             values
         :param is_proxy:    If True then update the proxy render path, otherwise
@@ -1587,7 +1589,7 @@ class TankWriteNodeHandler(object):
                     path_warning += (
                         "<br>".join(
                             self.__wrap_text(
-                                "The path does not match the current PTR Work Area.  You can "
+                                "The path does not match the current SG Work Area.  You can "
                                 "still render but you will not be able to publish this node.",
                                 60,
                             )
@@ -1624,6 +1626,7 @@ class TankWriteNodeHandler(object):
             # isn't in proxy mode!  Because we only want to update the UI to represent the 'actual'
             # state then we check for that here:
             if is_proxy == node.proxy():
+
                 # update warning displayed to the user:
                 if path_warning:
                     path_warning = (
@@ -1712,7 +1715,7 @@ class TankWriteNodeHandler(object):
         if not template.validate(file_name):
             raise Exception(
                 "Could not resolve the files on disk for node %s."
-                "The path '%s' is not recognized by Flow Production Tracking!"
+                "The path '%s' is not recognized by ShotGrid!"
                 % (node.name(), file_name)
             )
 
@@ -1789,7 +1792,7 @@ class TankWriteNodeHandler(object):
         Gather the render template, width, height and output name required
         to compute the render path for the specified node.
 
-        :param node:         The current Flow Production Tracking Write node
+        :param node:         The current Shotgun Write node
         :param is_proxy:     If True then compute the proxy path, otherwise compute the standard render path
         :returns:            Tuple containing (render template, width, height, output name)
         """
@@ -1824,7 +1827,7 @@ class TankWriteNodeHandler(object):
         """
         Computes the render path for a node.
 
-        :param node:         The current Flow Production Tracking Write node
+        :param node:         The current Shotgun Write node
         :param is_proxy:     If True then compute the proxy path, otherwise compute the standard render path
         :returns:            The computed render path
         """
@@ -1856,7 +1859,7 @@ class TankWriteNodeHandler(object):
         """
         Computes the render path for a node using the specified settings
 
-        :param node:               The current Flow Production Tracking Write node
+        :param node:               The current Shotgun Write node
         :param render_template:    The render template to use to construct the render path
         :param width:              The width of the rendered images
         :param height:             The height of the rendered images
@@ -1883,7 +1886,7 @@ class TankWriteNodeHandler(object):
         ):
             fields = self._script_template.get_fields(curr_filename)
         if not fields:
-            raise TkComputePathError("The current script is not a PTR Work File!")
+            raise TkComputePathError("The current script is not a SG Work File!")
 
         # Force use of %d format for nuke renders:
         fields["SEQ"] = "FORMAT: %d"
@@ -2143,7 +2146,7 @@ class TankWriteNodeHandler(object):
                 self.__set_output(node, node.knob("name").value())
 
         else:
-            # Propagate changes to certain knobs from the gizmo/group to the
+            # Propogate changes to certain knobs from the gizmo/group to the
             # encapsulated Write node.
             #
             # The normal mechanism of linking these knobs can't be used because the
@@ -2246,13 +2249,13 @@ class TankWriteNodeHandler(object):
             self.__update_knob_value(
                 n,
                 "tk_write_node_settings",
-                base64.b64encode(knob_changes).decode(),
+                six.ensure_text(base64.b64encode(knob_changes)),
             )
 
     def __on_user_create(self):
         """
-        Called when the user creates a Flow Production Tracking Write node.  Not
-        called when loading or pasting a script.
+        Called when the user creates a Shotgun Write node.  Not called when loading
+        or pasting a script.
         """
         node = nuke.thisNode()
 
