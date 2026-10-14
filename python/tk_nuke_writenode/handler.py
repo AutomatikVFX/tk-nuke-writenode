@@ -1289,23 +1289,16 @@ class TankWriteNodeHandler(object):
 
     def __set_gizmo_knob_locked(self, node, knob_name, locked):
         """
-        Grey a knob on the gizmo, or turn it back on.
-
-        node.knob() follows a link and returns the Write knob. Disabling that
-        would grey the real Write control. The link stored on the gizmo is what
-        the artist sees.
+        Enable or disable the link on the gizmo. node.knob() follows that link.
 
         :param nuke.Node node: Flow Production Tracking Write gizmo
         :param str knob_name: Knob name on the gizmo
-        :param bool locked: True greys the knob so it cannot be edited
+        :param bool locked: True disables the knob
 
         :returns: Nothing
         :rtype: None
         """
-        knob = node.knobs().get(knob_name)
-        if knob is None:
-            return
-        knob.setEnabled(not locked)
+        node.knobs()[knob_name].setEnabled(not locked)
 
     def __populate_format_settings(
         self,
@@ -1320,18 +1313,20 @@ class TankWriteNodeHandler(object):
         """
         Controls the file format of the write node
 
-        :param nuke.Node node: Flow Production Tracking Write node to set the profile on
-        :param str file_type: File type to set on the internal Write node
-        :param dict file_settings: Settings to set on the internal Write node
-        :param bool reset_all_settings: When true, profile settings overwrite artist values
-        :param list promoted_write_knobs: Knob names promoted from the encapsulated Write.
-                                          When reset_all_settings is false these are left
-                                          for the artist and restored after the rebuild.
-        :param list lock_write_knobs: Knob names the profile owns. The profile value is
-                                      applied even when the knob is promoted.
-        :param bool keep_live_promoted: When true, values already on the Write are put
-                                        back after the file type rebuilds its knobs.
-                                        When false, the values stored at save time are used.
+        :param node:                    The Flow Production Tracking Write node to set the profile on
+        :param file_type:               The file type to set on the internal Write node
+        :param file_settings:           A dictionary of settings to set on the internal Write node
+        :param reset_all_settings:      Determines if all settings should be set on the internal Write
+                                        node (True) or just those that aren't propagated to the Shotgun
+                                        Write node (False)
+        :param promoted_write_knobs:    A list of knob names that have been promoted from the
+                                        encapsulated write node. In the case where reset_all_settings
+                                        is false, these knobs are treated as user-controlled knobs
+                                        and will not be reset to their preset value.
+        :param list lock_write_knobs:   Knob names the profile owns. The profile value is applied
+                                        even when the knob is promoted.
+        :param bool keep_live_promoted: When true, values already on the Write are put back after
+                                        file_type rebuilds its knobs.
 
         :returns: Nothing
         :rtype: None
@@ -1341,17 +1336,13 @@ class TankWriteNodeHandler(object):
         promoted_write_knobs = promoted_write_knobs or []
         lock_write_knobs = lock_write_knobs or []
 
-        # setting file_type rebuilds interleave and first part at Nuke's defaults.
-        # An FPTR workfile save changes context and does this while the script
-        # is still open, so keep the live values and put them back afterwards.
-        # On script load those knobs do not exist yet. The saved values are
-        # applied once file_type has created them.
+        # file_type rebuilds the codec knobs. Keep the current values to put back.
         promoted_values = {}
         if keep_live_promoted and not reset_all_settings:
             promoted_values = {
                 name: write_node.knob(name).value()
                 for name in promoted_write_knobs
-                if name not in lock_write_knobs and write_node.knob(name)
+                if name not in lock_write_knobs
             }
         stored_promoted = {}
         if not keep_live_promoted and not reset_all_settings:
@@ -1449,9 +1440,9 @@ class TankWriteNodeHandler(object):
                     match = re.match(r"(\S+)\s.*", setting)
                     if match:
                         if (
-                        match.group(1) in promoted_write_knobs
-                        and match.group(1) not in lock_write_knobs
-                    ):
+                            match.group(1) in promoted_write_knobs
+                            and match.group(1) not in lock_write_knobs
+                        ):
                             self._app.log_debug(
                                 "Found promoted write node knob setting: %s" % setting
                             )
@@ -1461,33 +1452,14 @@ class TankWriteNodeHandler(object):
                     "Promoted write node knob settings to be applied: %s"
                     % filtered_settings
                 )
-                try:
-                    write_node.readKnobs("\n".join(filtered_settings))
-                except Exception as error:
-                    self._app.log_warning(
-                        "Could not restore promoted Write knobs on %s - %s"
-                        % (node.name(), error)
-                    )
+                write_node.readKnobs("\n".join(filtered_settings))
                 self.reset_render_path(node)
 
-        if stored_promoted:
-            for name, script in stored_promoted.items():
-                knob = write_node.knob(name)
-                if knob is None:
-                    self._app.log_warning(
-                        "Saved Write knob %s could not be restored on %s."
-                        % (name, node.name())
-                    )
-                    continue
-                self.__set_saved_knob_value(knob, script)
+        for name, script in stored_promoted.items():
+            self.__set_saved_knob_value(write_node.knob(name), script)
 
-        # Live values win. This runs after the file type rebuild and after the
-        # saved blob, which is what an FPTR workfile save hits.
         for name, value in promoted_values.items():
-            knob = write_node.knob(name)
-            if knob is None:
-                continue
-            knob.setValue(value)
+            write_node.knob(name).setValue(value)
 
     def __set_output(self, node, output_name):
         """
@@ -2101,9 +2073,6 @@ class TankWriteNodeHandler(object):
 
         self._app.log_debug("Setting up new node...")
 
-        # An already open node still has the artist's Write knobs. A script
-        # load rebuilds the gizmo, so those knobs are gone and the saved
-        # values have to be put back. Read the flag before it is cleared.
         keep_live_promoted = self.__is_node_fully_constructed(node)
 
         # reset the construction flag to ensure that
@@ -2191,38 +2160,22 @@ class TankWriteNodeHandler(object):
 
     def __stored_promoted_knob_scripts(self, node, promoted_write_knobs, lock_write_knobs):
         """
-        Read promoted Write knob values stored on the gizmo at save time.
-
-        Link knobs are not written into the script. The save callback stores each
-        promoted knob in tk_write_node_settings, and a reopened script uses those
-        lines to put the artist's values back after the file type creates the knobs.
+        Promoted knob values stored on the gizmo at save time.
 
         :param nuke.Node node: Flow Production Tracking Write gizmo
         :param list promoted_write_knobs: Knob names promoted for this profile
         :param list lock_write_knobs: Knob names the profile owns
 
-        :returns: Knob name to the toScript text saved for it
+        :returns: Knob name to the text saved for it
         :rtype: dict
         """
         stored = {}
-        settings_knob = node.knob("tk_write_node_settings")
-        if settings_knob is None or not settings_knob.value():
+        raw_settings = node.knob("tk_write_node_settings").value()
+        if not raw_settings:
             return stored
 
-        try:
-            knob_settings = pickle.loads(base64.b64decode(settings_knob.value()))
-        except Exception as error:
-            self._app.log_warning(
-                "Failed to read saved Write knobs from %s - %s" % (node.name(), error)
-            )
-            return stored
-
-        if isinstance(knob_settings, bytes):
-            knob_settings = knob_settings.decode("utf-8", "replace")
-
-        promoted_write_knobs = promoted_write_knobs or []
-        lock_write_knobs = lock_write_knobs or []
-        for setting in str(knob_settings).splitlines():
+        knob_settings = pickle.loads(base64.b64decode(raw_settings))
+        for setting in knob_settings.splitlines():
             match = re.match(r"(\S+)\s+(.*)", setting.strip())
             if not match:
                 continue
@@ -2271,8 +2224,6 @@ class TankWriteNodeHandler(object):
             return
 
         if knob.name() == "tk_profile_list":
-            # Saving the script can notify this knob without the artist
-            # picking a different profile. Only a real change resets values.
             new_profile_name = knob.value()
             if new_profile_name == node.knob("profile_name").value():
                 return
@@ -2402,11 +2353,9 @@ class TankWriteNodeHandler(object):
             nk_data = write_node.writeKnobs(
                 nuke.WRITE_NON_DEFAULT_ONLY | nuke.TO_SCRIPT | nuke.TO_VALUE
             )
-            # promoted knobs at their defaults are missing from the blob above
-            profile = self.__get_node_profile_settings(n) or {}
+            profile = self.__get_node_profile_settings(n)
             for name in profile.get("promote_write_knobs", []):
-                if write_node.knob(name):
-                    nk_data += "\n%s %s" % (name, write_node.knob(name).toScript(True))
+                nk_data += "\n%s %s" % (name, write_node.knob(name).toScript(True))
             knob_changes = pickle.dumps(nk_data, protocol=0)
             self.__update_knob_value(
                 n,
