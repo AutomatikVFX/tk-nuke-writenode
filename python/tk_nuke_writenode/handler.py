@@ -1105,6 +1105,7 @@ class TankWriteNodeHandler(object):
         file_settings = profile["settings"]
         tile_color = profile["tile_color"]
         promote_write_knobs = profile.get("promote_write_knobs", [])
+        lock_write_knobs = profile.get("lock_write_knobs", [])
 
         # Make sure any invalid entries are removed from the profile list:
         list_profiles = node.knob("tk_profile_list").values()
@@ -1122,6 +1123,7 @@ class TankWriteNodeHandler(object):
             file_settings,
             reset_all_settings,
             promote_write_knobs,
+            lock_write_knobs,
         )
 
         # cache the type and settings on the root node so that
@@ -1134,6 +1136,7 @@ class TankWriteNodeHandler(object):
         # Hide the promoted knobs that might exist from the previously
         # active profile.
         for promoted_knob in self._promoted_knobs.get(node, []):
+            promoted_knob.setEnabled(True)
             promoted_knob.setFlag(nuke.INVISIBLE)
 
         self._promoted_knobs[node] = []
@@ -1170,7 +1173,10 @@ class TankWriteNodeHandler(object):
             label = target_knob.label() or knob_name
             link_knob.setLabel(label)
             link_knob.clearFlag(nuke.INVISIBLE)
+            link_knob.setEnabled(knob_name not in lock_write_knobs)
             self._promoted_knobs[node].append(link_knob)
+
+        self.__set_gizmo_knob_locked(node, "channels", "channels" in lock_write_knobs)
 
         # Adding knobs might have caused us to jump tabs, so we will set
         # back to the first tab.
@@ -1276,6 +1282,26 @@ class TankWriteNodeHandler(object):
         # finally, set the output name on the knob:
         node.knob(TankWriteNodeHandler.OUTPUT_KNOB_NAME).setValue(output_name)
 
+    def __set_gizmo_knob_locked(self, node, knob_name, locked):
+        """
+        Grey a knob on the gizmo, or turn it back on.
+
+        node.knob() follows a link and returns the Write knob. Disabling that
+        would grey the real Write control. The link stored on the gizmo is what
+        the artist sees.
+
+        :param nuke.Node node: Flow Production Tracking Write gizmo
+        :param str knob_name: Knob name on the gizmo
+        :param bool locked: True greys the knob so it cannot be edited
+
+        :returns: Nothing
+        :rtype: None
+        """
+        knob = node.knobs().get(knob_name)
+        if knob is None:
+            return
+        knob.setEnabled(not locked)
+
     def __populate_format_settings(
         self,
         node,
@@ -1283,31 +1309,35 @@ class TankWriteNodeHandler(object):
         file_settings,
         reset_all_settings=False,
         promoted_write_knobs=None,
+        lock_write_knobs=None,
     ):
         """
         Controls the file format of the write node
 
-        :param node:                    The Flow Production Tracking Write node to set the profile on
-        :param file_type:               The file type to set on the internal Write node
-        :param file_settings:           A dictionary of settings to set on the internal Write node
-        :param reset_all_settings:      Determines if all settings should be set on the internal Write
-                                        node (True) or just those that aren't propagated to the Shotgun
-                                        Write node (False)
-        :param promoted_write_knobs:    A list of knob names that have been promoted from the
-                                        encapsulated write node. In the case where reset_all_settings
-                                        is false, these knobs are treated as user-controlled knobs
-                                        and will not be reset to their preset value.
+        :param nuke.Node node: Flow Production Tracking Write node to set the profile on
+        :param str file_type: File type to set on the internal Write node
+        :param dict file_settings: Settings to set on the internal Write node
+        :param bool reset_all_settings: When true, profile settings overwrite artist values
+        :param list promoted_write_knobs: Knob names promoted from the encapsulated Write.
+                                          When reset_all_settings is false these are left
+                                          for the artist and restored after the rebuild.
+        :param list lock_write_knobs: Knob names the profile owns. The profile value is
+                                      applied even when the knob is promoted.
+
+        :returns: Nothing
+        :rtype: None
         """
         # get the embedded write node
         write_node = node.node(TankWriteNodeHandler.WRITE_NODE_NAME)
         promoted_write_knobs = promoted_write_knobs or []
+        lock_write_knobs = lock_write_knobs or []
 
         # setting file_type rebuilds the codec knobs at their defaults, so keep
-        # the artist's promoted values across it
+        # the artist's promoted values across it. Locked knobs belong to the profile.
         promoted_values = {
             name: write_node.knob(name).toScript()
             for name in promoted_write_knobs
-            if write_node.knob(name)
+            if name not in lock_write_knobs and write_node.knob(name)
         }
 
         # set the file_type
@@ -1340,6 +1370,9 @@ class TankWriteNodeHandler(object):
                     knobs_to_skip.append(knob_name)
 
             knobs_to_skip.extend(promoted_write_knobs)
+            knobs_to_skip = [
+                knob_name for knob_name in knobs_to_skip if knob_name not in lock_write_knobs
+            ]
 
         # now apply file format settings
         for setting_name, setting_value in file_settings.items():
@@ -1400,7 +1433,10 @@ class TankWriteNodeHandler(object):
                     # that would be something like "datatype".
                     match = re.match(r"(\S+)\s.*", setting)
                     if match:
-                        if match.group(1) in promoted_write_knobs:
+                        if (
+                        match.group(1) in promoted_write_knobs
+                        and match.group(1) not in lock_write_knobs
+                    ):
                             self._app.log_debug(
                                 "Found promoted write node knob setting: %s" % setting
                             )

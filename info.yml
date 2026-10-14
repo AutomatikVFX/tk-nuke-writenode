@@ -81,6 +81,16 @@ configuration:
                                      up to the user interface of the gizmo."
                     allows_empty: True
                     default_value: []
+                lock_write_knobs:
+                    type: list
+                    values:
+                        type: str
+                    description:    "Knob names this profile owns. They are shown on the gizmo, reset to the
+                                     profile value whenever the node is set up, and greyed out so the artist
+                                     can see them but not edit them. channels is already on the gizmo. Other
+                                     names must also be in promote_write_knobs to be visible."
+                    allows_empty: True
+                    default_value: []
 
     # Note that if you have presets which promote write knobs, the convert menu items will not be shown, regardless
     # of the value applied to this setting, as at present the convert back method doesn't support promoted knobs.
