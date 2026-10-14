@@ -1336,7 +1336,7 @@ class TankWriteNodeHandler(object):
         promoted_write_knobs = promoted_write_knobs or []
         lock_write_knobs = lock_write_knobs or []
 
-        # Setting the file type throws interleave and first part away and Nuke
+        # NOTE: Setting the file type throws interleave and first part away and Nuke
         # makes new ones at its own default. An FPTR save does this while the
         # script is still open, so grab the current values and put them back.
         # Reopening the script builds a new write, so those knobs are gone and
@@ -1459,7 +1459,7 @@ class TankWriteNodeHandler(object):
                 write_node.readKnobs("\n".join(filtered_settings))
                 self.reset_render_path(node)
 
-        # Put the values back after the rebuild. The live ones win, so an FPTR
+        # NOTE: Put the values back after the rebuild. The live ones win, so an FPTR
         # save does not snap the node back to whatever was stored last time.
         for name, script in stored_promoted.items():
             self.__set_saved_knob_value(write_node.knob(name), script)
@@ -2079,7 +2079,7 @@ class TankWriteNodeHandler(object):
 
         self._app.log_debug("Setting up new node...")
 
-        # True when the node is already open. False when the script is opening
+        # NOTE: True when the node is already open. False when the script is opening
         # and the write inside the gizmo is brand new.
         keep_live_promoted = self.__is_node_fully_constructed(node)
 
@@ -2233,7 +2233,7 @@ class TankWriteNodeHandler(object):
 
         if knob.name() == "tk_profile_list":
             new_profile_name = knob.value()
-            # A save can poke this knob without the artist changing profile.
+            # NOTE: A save can poke this knob without the artist changing profile.
             # Only a real change puts the profile defaults back.
             if new_profile_name == node.knob("profile_name").value():
                 return
@@ -2363,7 +2363,7 @@ class TankWriteNodeHandler(object):
             nk_data = write_node.writeKnobs(
                 nuke.WRITE_NON_DEFAULT_ONLY | nuke.TO_SCRIPT | nuke.TO_VALUE
             )
-            # writeKnobs() misses interleave and first part. Write them in
+            # NOTE: writeKnobs() misses interleave and first part. Write them in
             # here or the next time the script opens there is nothing to put back.
             profile = self.__get_node_profile_settings(n)
             for name in profile.get("promote_write_knobs", []):
