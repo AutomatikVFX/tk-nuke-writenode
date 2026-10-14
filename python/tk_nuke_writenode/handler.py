@@ -1341,30 +1341,26 @@ class TankWriteNodeHandler(object):
         promoted_write_knobs = promoted_write_knobs or []
         lock_write_knobs = lock_write_knobs or []
 
-        # setting file_type rebuilds the codec knobs at their defaults.
-        # On a live node the artist's values are still there, so keep them.
-        # On script load the Write inside the gizmo is new and those knobs
-        # do not exist yet. The saved values are applied once file_type
-        # has created them.
+        # setting file_type rebuilds interleave and first part at Nuke's defaults.
+        # An FPTR workfile save changes context and does this while the script
+        # is still open, so keep the live values and put them back afterwards.
+        # On script load those knobs do not exist yet. The saved values are
+        # applied once file_type has created them.
         promoted_values = {}
-        if keep_live_promoted:
+        if keep_live_promoted and not reset_all_settings:
             promoted_values = {
-                name: write_node.knob(name).toScript()
+                name: write_node.knob(name).value()
                 for name in promoted_write_knobs
                 if name not in lock_write_knobs and write_node.knob(name)
             }
         stored_promoted = {}
-        if not keep_live_promoted:
+        if not keep_live_promoted and not reset_all_settings:
             stored_promoted = self.__stored_promoted_knob_scripts(
                 node, promoted_write_knobs, lock_write_knobs
             )
 
         # set the file_type
         write_node.knob("file_type").setValue(file_type)
-        if not reset_all_settings and keep_live_promoted:
-            for name, value in promoted_values.items():
-                if write_node.knob(name):
-                    write_node.knob(name).fromScript(value)
 
         # and read it back to check that the value is what we expect
         if write_node.knob("file_type").value() != file_type:
@@ -1474,7 +1470,7 @@ class TankWriteNodeHandler(object):
                     )
                 self.reset_render_path(node)
 
-        if not reset_all_settings and stored_promoted:
+        if stored_promoted:
             for name, script in stored_promoted.items():
                 knob = write_node.knob(name)
                 if knob is None:
@@ -1483,7 +1479,15 @@ class TankWriteNodeHandler(object):
                         % (name, node.name())
                     )
                     continue
-                knob.fromScript(script)
+                self.__set_saved_knob_value(knob, script)
+
+        # Live values win. This runs after the file type rebuild and after the
+        # saved blob, which is what an FPTR workfile save hits.
+        for name, value in promoted_values.items():
+            knob = write_node.knob(name)
+            if knob is None:
+                continue
+            knob.setValue(value)
 
     def __set_output(self, node, output_name):
         """
@@ -2227,6 +2231,24 @@ class TankWriteNodeHandler(object):
                 continue
             stored[name] = match.group(2)
         return stored
+
+    def __set_saved_knob_value(self, knob, script):
+        """
+        Put a saved Write knob value back after the file type has rebuilt it.
+
+        :param nuke.Knob knob: Knob on the internal Write
+        :param str script: Value text stored at save time
+
+        :returns: Nothing
+        :rtype: None
+        """
+        text = script.strip()
+        if len(text) >= 2 and text[0] == text[-1] == '"':
+            text = text[1:-1]
+        if knob.Class() == "Boolean_Knob":
+            knob.setValue(text.lower() in ("true", "1", "yes"))
+            return
+        knob.setValue(text)
 
     def __on_knob_changed(self):
         """
