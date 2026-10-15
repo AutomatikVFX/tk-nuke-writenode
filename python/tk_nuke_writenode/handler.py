@@ -2365,7 +2365,7 @@ class TankWriteNodeHandler(object):
             )
             # NOTE: writeKnobs() misses interleave and first part. Write them in
             # here or the next time the script opens there is nothing to put back.
-            profile = self.__get_node_profile_settings(n)
+            profile = self.__get_node_profile_settings(n) or {}
             for name in profile.get("promote_write_knobs", []):
                 nk_data += "\n%s %s" % (name, write_node.knob(name).toScript(True))
             knob_changes = pickle.dumps(nk_data, protocol=0)
