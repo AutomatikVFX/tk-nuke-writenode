@@ -1899,8 +1899,9 @@ class TankWriteNodeHandler(object):
             # script load). That validates the whole upstream tree mid-load, and Reads
             # on a default colorspace then resolve without the default colorspace
             # mappers. Use the size from the cached path instead. Width and height don't
-            # lock the path, and the real size is used the next time the path is
-            # computed, at the latest in beforeRender.
+            # lock the path, so a later path compute can still pick up the node's size.
+            # A terminal session (the farm) renders to the saved path anyway, the same
+            # as when the size was measured here.
             # See https://github.com/AutomatikVFX/tk-nuke-writenode/issues/10
             width, height = self.__get_cached_dimensions(
                 node, render_template, is_proxy
