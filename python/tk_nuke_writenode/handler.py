@@ -1850,27 +1850,6 @@ class TankWriteNodeHandler(object):
         #        "w:", scaled_format.width(), "h:", scaled_format.height())
         return (scaled_format.width(), scaled_format.height())
 
-    def __get_cached_dimensions(self, node, render_template, is_proxy=False):
-        """
-        Width and height stored in the node's cached render path.
-
-        :param node:            The current Flow Production Tracking Write node
-        :param render_template: The template the path is computed with
-        :param is_proxy:        If True then use the cached proxy path
-        :returns:               Tuple containing (width, height), (0, 0) if unknown
-        """
-        cached_path = node.knob(
-            "tk_cached_proxy_path" if is_proxy else "cached_path"
-        ).value()
-        if not render_template or not cached_path:
-            return 0, 0
-
-        try:
-            fields = render_template.get_fields(cached_path)
-        except TankError:
-            return 0, 0
-        return fields.get("width", 0), fields.get("height", 0)
-
     def __gather_render_settings(self, node, is_proxy=False):
         """
         Gather the render template, width, height and output name required
@@ -1894,18 +1873,19 @@ class TankWriteNodeHandler(object):
                 # of the proxy dimensions.
                 return self.__gather_render_settings(node, False)
 
-        if not self.__is_node_fully_constructed(node):
-            # Don't ask the node for its size while it is set up (onCreate, e.g. on
-            # script load). That validates the whole upstream tree mid-load, and Reads
+        cached_path = node.knob(
+            "tk_cached_proxy_path" if is_proxy else "cached_path"
+        ).value()
+        if cached_path and not self.__is_node_fully_constructed(node):
+            # Don't ask the node for its size while it is set up from a script (onCreate
+            # on script load). That validates the whole upstream tree mid-load, and Reads
             # on a default colorspace then resolve without the default colorspace
-            # mappers. Use the size from the cached path instead. Width and height don't
-            # lock the path, so a later path compute can still pick up the node's size.
-            # A terminal session (the farm) renders to the saved path anyway, the same
-            # as when the size was measured here.
+            # mappers. Use the size from the cached path instead. A new node has no
+            # cached path yet and isn't created mid-load, so it asks the node as before.
+            # A terminal session (the farm) renders to the saved path anyway.
             # See https://github.com/AutomatikVFX/tk-nuke-writenode/issues/10
-            width, height = self.__get_cached_dimensions(
-                node, render_template, is_proxy
-            )
+            fields = render_template.get_fields(cached_path)
+            width, height = fields["width"], fields["height"]
         elif is_proxy:
             # width & height are set to the proxy dimensions:
             width, height = self.__calculate_proxy_dimensions(node)
