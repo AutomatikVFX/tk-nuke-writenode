@@ -1876,14 +1876,22 @@ class TankWriteNodeHandler(object):
         cached_path = node.knob(
             "tk_cached_proxy_path" if is_proxy else "cached_path"
         ).value()
-        if cached_path and not self.__is_node_fully_constructed(node):
+        if (
+            cached_path
+            and not self.__is_node_fully_constructed(node)
+            and render_template
+            and {"width", "height"} <= set(render_template.keys)
+            and render_template.validate(cached_path)
+        ):
             # Don't ask the node for its size while it is set up from a script (onCreate
             # on script load). That validates the whole upstream tree mid-load, and Reads
             # on a default colorspace then resolve without the default colorspace
             # mappers. Use the size from the cached path instead. A new node has no
             # cached path yet and isn't created mid-load, so it asks the node as before.
             # A terminal session (the farm) renders to the saved path anyway.
-            # See https://github.com/AutomatikVFX/tk-nuke-writenode/issues/10
+            # Templates without a size (STMap) and cached paths that don't fit the
+            # template ask the node as before.
+            # See https://github.com/AutomatikVFX/tk-nuke-writenode/issues/10 and #12
             fields = render_template.get_fields(cached_path)
             width, height = fields["width"], fields["height"]
         elif is_proxy:
