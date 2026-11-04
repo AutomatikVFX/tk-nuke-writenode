@@ -1876,12 +1876,15 @@ class TankWriteNodeHandler(object):
         cached_path = node.knob(
             "tk_cached_proxy_path" if is_proxy else "cached_path"
         ).value()
-        if (
-            cached_path
-            and not self.__is_node_fully_constructed(node)
-            and render_template
+        loading_saved_node = cached_path and not self.__is_node_fully_constructed(node)
+        template_has_size = (
+            render_template
             and "width" in render_template.keys
             and "height" in render_template.keys
+        )
+        if (
+            loading_saved_node
+            and template_has_size
             and render_template.validate(cached_path)
         ):
             # Don't ask the node for its size while it is set up from a script (onCreate
