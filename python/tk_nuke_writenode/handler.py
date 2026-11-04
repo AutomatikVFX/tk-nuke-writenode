@@ -1876,7 +1876,9 @@ class TankWriteNodeHandler(object):
         cached_path = node.knob(
             "tk_cached_proxy_path" if is_proxy else "cached_path"
         ).value()
+        # A saved node being set up from a script. A new node has no cached path yet.
         loading_saved_node = cached_path and not self.__is_node_fully_constructed(node)
+        # STMap templates have no {width}x{height}, so their path holds no size to read.
         template_has_size = (
             render_template
             and "width" in render_template.keys
@@ -1885,6 +1887,8 @@ class TankWriteNodeHandler(object):
         if (
             loading_saved_node
             and template_has_size
+            # get_fields raises on a cached path that doesn't fit the template (a pasted
+            # node, a full-res path in the proxy knob). validate returns False instead.
             and render_template.validate(cached_path)
         ):
             # Don't ask the node for its size while it is set up from a script (onCreate
@@ -1893,8 +1897,6 @@ class TankWriteNodeHandler(object):
             # mappers. Use the size from the cached path instead. A new node has no
             # cached path yet and isn't created mid-load, so it asks the node as before.
             # A terminal session (the farm) renders to the saved path anyway.
-            # Templates without a size (STMap) and cached paths that don't fit the
-            # template ask the node as before.
             # See https://github.com/AutomatikVFX/tk-nuke-writenode/issues/10 and #12
             fields = render_template.get_fields(cached_path)
             width, height = fields["width"], fields["height"]
